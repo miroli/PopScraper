@@ -21,7 +21,7 @@ class PopScraper(object):
 
     def _init_session(self):
         """
-        Start a new session and set initial validation parameters.
+        Start new session and set initial validation parameters.
         """
         self.session = requests.Session()
         resp = self.session.get(PopScraper.URL)
