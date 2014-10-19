@@ -3,7 +3,6 @@
 
 import requests
 from bs4 import BeautifulSoup as bs
-import pprint
 import re
 import math
 
@@ -19,14 +18,19 @@ class PopScraper(object):
         self.year_end = year_end
 
         self._init_session()
-        # self._fetch_results()
 
     def _init_session(self):
+        """
+        Start a new session and set initial validation parameters.
+        """
         self.session = requests.Session()
         resp = self.session.get(PopScraper.URL)
         self._set_validation(resp)
 
     def _set_validation(self, response):
+        """
+        Parse out the validation parameters from the HTML response.
+        """
         validation = {}
         soup = bs(response.text)
         validators = ['__VIEWSTATE', '__VIEWSTATEGENERATOR', '__EVENTVALIDATION']
@@ -38,6 +42,9 @@ class PopScraper(object):
         self.validation = validation
 
     def fetch(self):
+        """
+        Fetch the first 50 results.
+        """
         payload = {
             'ctl00$ContentPlaceHolder1$tbxSearchArtist': self.artist,
             'ctl00$ContentPlaceHolder1$ddlFormat': '0',
@@ -61,12 +68,13 @@ class PopScraper(object):
         self._save_results()
 
     def fetch_all(self):
+        """
+        Fetch all results.
+        """
         self.fetch()
 
         page = 1
         pages_count = math.ceil(int(self.count) / 50)
-        print self.count
-        print pages_count
         while page <= pages_count:
             page = page + 1
             self._fetch_next(page=page)
@@ -95,6 +103,9 @@ class PopScraper(object):
         self._set_validation(r)
 
     def _save_results(self):
+        """
+        Write the results to file.
+        """
         with open(self.filename, 'a+') as f:
             for row in self.results.find_all('tr', class_=['resultRow', 'resultRowAlt']):
                 record = ''
@@ -107,5 +118,6 @@ class PopScraper(object):
 
 
 if __name__ == '__main__':
-    scraper = PopScraper(year_start='2006')
+    # Example usage
+    scraper = PopScraper(year_start='2007')
     scraper.fetch_all()
