@@ -10,10 +10,14 @@ class PopScraper(object):
 	COOKIE_NAME = 'ASP.NET_SessionId'
 
 	def __init__(self, artist='', year_start='--'):
-		r = requests.get(PopScraper.URL)
-		self._set_validation(r)
-		self._set_payload(artist, year_start)
+		self._init_session()
+		self._set_payload(year_start)
 		self._fetch_results()
+
+	def _init_session(self):
+		self.session = requests.Session()
+		resp = self.session.get(PopScraper.URL)
+		self._set_validation(resp)
 
 	def _set_validation(self, response):
 		validation = {}
@@ -24,21 +28,18 @@ class PopScraper(object):
 			input_element = soup.find('input', { 'id': validator })
 			validation[validator] = input_element['value']
 
-		if len(response.cookies) > 0:
-			self.cookie = response.cookies[PopScraper.COOKIE_NAME]
-
 		self.validation = validation
 
-	def _set_payload(self, artist='', year_start='--', eventtarget='', eventargument='', __LASTFOCUS=''):
+	def _set_payload(self, year_start='--'):
 		self.payload = {
-			'__EVENTTARGET': eventtarget,
-			'__EVENTARGUMENT': eventargument,
+			'__EVENTTARGET': '',
+			'__EVENTARGUMENT': '',
 			'__LASTFOCUS': '',
 			'ctl00$ContentPlaceHolder1$tbxSearchAlbum': '',
-			'ctl00$ContentPlaceHolder1$tbxSearchArtist': artist,
+			'ctl00$ContentPlaceHolder1$tbxSearchArtist': '',
 			'ctl00$ContentPlaceHolder1$tbxSearchSkivbolag': '',
 			'ctl00$ContentPlaceHolder1$tbxSearchDistributor': '',
-			'ctl00$ContentPlaceHolder1$ddlFormat': 0,
+			'ctl00$ContentPlaceHolder1$ddlFormat': '0',
 			'ctl00$ContentPlaceHolder1$ddlYearStart': year_start,
 			'ctl00$ContentPlaceHolder1$tbxSearchNo': '',
 			'ctl00$ContentPlaceHolder1$tbxSearchTrack': '',
@@ -49,21 +50,18 @@ class PopScraper(object):
 			'ctl00$ContentPlaceHolder1$btnSearch': '',
 			'ctl00$tbxOverlaySearch': '',
 			'ctl00$tbxOverlaySearchLangId': '',
-			'ctl00$ContentPlaceHolder1$ddlGridRows': 50,
+			'ctl00$ContentPlaceHolder1$ddlGridRows': '20',
 			'__VIEWSTATE': self.validation['__VIEWSTATE'],
 			'__VIEWSTATEGENERATOR': self.validation['__VIEWSTATEGENERATOR'],
 			'__EVENTVALIDATION': self.validation['__EVENTVALIDATION']
 		}
 
 	def _fetch_results(self):
-		r = requests.post(PopScraper.URL, data=self.payload,
-				cookies={PopScraper.COOKIE_NAME: self.cookie},
-				headers={'content-type': 'application/x-www-form-urlencoded'})
+		r = self.session.post(PopScraper.URL, data=self.payload,
+				headers={'content-type': 'application/x-www-form-urlencoded',
+						'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.101 Safari/537.36'})
 
-		print '----> Validation headers...'
-		print self.validation['__VIEWSTATE'][0:40]
-		print self.validation['__VIEWSTATEGENERATOR']
-		print self.validation['__EVENTVALIDATION'][0:40]
+		self._pprint_request(r.request)
 
 		self._set_validation(r)
 		self.results = bs(r.text)
@@ -78,7 +76,7 @@ class PopScraper(object):
 			'ctl00$ContentPlaceHolder1$tbxSearchArtist':'',
 			'ctl00$ContentPlaceHolder1$tbxSearchSkivbolag':'',
 			'ctl00$ContentPlaceHolder1$tbxSearchDistributor':'',
-			'ctl00$ContentPlaceHolder1$ddlFormat':0,
+			'ctl00$ContentPlaceHolder1$ddlFormat':'0',
 			'ctl00$ContentPlaceHolder1$ddlYearStart':'2006',
 			'ctl00$ContentPlaceHolder1$tbxSearchNo':'',
 			'ctl00$ContentPlaceHolder1$tbxSearchTrack':'',
@@ -86,7 +84,7 @@ class PopScraper(object):
 			'ctl00$ContentPlaceHolder1$tbxSearchForlag':'',
 			'ctl00$ContentPlaceHolder1$tbxSearchPerson':'',
 			'ctl00$ContentPlaceHolder1$ddlYearSlut':'--',
-			'ctl00$ContentPlaceHolder1$ddlGridRows':50,
+			'ctl00$ContentPlaceHolder1$ddlGridRows':'20',
 			'ctl00$tbxOverlaySearch':'',
 			'ctl00$tbxOverlaySearchLangId':'',
 			'__VIEWSTATE': self.validation['__VIEWSTATE'],
@@ -94,11 +92,6 @@ class PopScraper(object):
 			'__EVENTVALIDATION': self.validation['__EVENTVALIDATION'],
 			'__ASYNCPOST':'true'
 		}
-
-		print '\n----> Validation headers in next search...'
-		print self.validation['__VIEWSTATE'][0:40]
-		print self.validation['__VIEWSTATEGENERATOR']
-		print self.validation['__EVENTVALIDATION'][0:40]
 
 		headers = {
 			'Accept':'*/*',
@@ -116,12 +109,11 @@ class PopScraper(object):
 			'X-Requested-With':'XMLHttpRequest'
 		}
 
-		r = requests.post(PopScraper.URL, data=self.payload,
-				cookies={PopScraper.COOKIE_NAME: self.cookie},
+		r = self.session.post(PopScraper.URL, data=payload,
 				headers=headers)
 
-		print '\nCookies: %s' % r.cookies
-		print '\nHeaders: %s' % r.headers
+		print '\n NEXT REQUEST COMING------>'
+		self._pprint_request(r.request)
 
 		soup = bs(r.text).find('tr', class_='resultRow')
 		print '\n------> First row from next search result...'
@@ -137,6 +129,21 @@ class PopScraper(object):
 					else:
 						record += '"%s",' % cell.text
 				f.write('%s\n' % record[:-1].encode('utf-8'))
+
+
+
+	def _pprint_request(self, req):
+		print '%s %s' % (req.method, req.url)
+		for k, v in req.headers.items():
+			print '%s: %s' % (k, v)
+
+		print ''
+
+		for param in req.body.split('&'):
+			if len(param) > 60:
+				print param[0:60].replace('=',': ') + '...'
+			else:
+				print param.replace('=',': ')
 
 if __name__ == '__main__':
 	scraper = PopScraper(year_start='2006')
